@@ -1,1 +1,310 @@
+<!doctype html>
+<html>
+<head>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script>
+       
+        function calcLevel(concepts, name)
+        {
+            const idx = concepts.findIndex(x=>x.name==name);
+            if(idx < 0)
+                return 0;
+            else
+            {
+                if(concepts[idx].hasOwnProperty("level"))
+                    return concepts[idx].level;
 
+                if(concepts[idx].depends.length == 0)
+                {
+                    concepts[idx].level = 0;
+                }
+                else
+                {
+                    let maxLevel = 0;
+                    concepts[idx].depends.forEach(element => {
+                        
+                        let lvl = calcLevel(concepts, element);
+                        if(lvl > maxLevel)
+                            maxLevel = lvl;
+                    });
+                    concepts[idx].level = maxLevel + 1;
+                }
+            }
+            //console.log(concepts[idx]);
+           
+            return concepts[idx].level;
+        }
+
+        function showConcepts(concepts)
+        {
+            concepts.forEach(element => {
+                calcLevel(concepts, element.name);
+                
+            });
+            console.log(concepts)
+            const maxLevel = d3.max(concepts, v=>v.level);
+            console.log(maxLevel)
+
+            // The following code is the typical routine of my d3.js code. 
+            const svg = d3.select('svg');
+            const width = +svg.attr('width');
+            const height = +svg.attr('height');
+            const margin = {top: 60, right: 30, bottom: 60, left: 150};
+            const innerWidth = width - margin.left - margin.right;
+            const innerHeight = height - margin.top - margin.bottom;
+
+            const levelHeight = innerHeight / (maxLevel+1);
+
+            const highlight = (event)=>{
+                const cls = d3.select(event.currentTarget).attr('class');
+                console.log(cls, "in");
+                const deps = concepts.find(x=>x.name==cls).depends;
+                console.log(deps);
+                d3.select('g')
+                .selectChildren()
+                .filter(function(d,i){
+                    const tcls = d3.select(this).attr('class');
+                    const tname = d3.select(this).attr('id');
+                    const ttext = d3.select(this).text();
+                    return tcls!==cls && !deps.includes(tname) && !deps.includes(ttext)
+                })
+                .attr('opacity', '0.1');
+                
+            };
+            const normal = (event)=>{
+                const cls = d3.select(event.currentTarget).attr('class');
+                console.log(cls, "out");
+                d3.select('g')
+                .selectChildren()
+                .attr('opacity', '1');
+            };
+
+            let mainGroup = svg.append('g')
+            .attr('transform', `translate(${margin.left}, ${margin.top})`)
+            
+            //从最基本的开始
+            for(let i = 0; i <= maxLevel; i++)
+            {
+                let arr = concepts.filter(x=>x.level==i);
+                console.log(arr)
+                let j = 0;
+                let direction = -1;
+                let cy = levelHeight / 2 + levelHeight * i;
+                let cx = 0;
+                arr.forEach(element=>{
+                    cx = cx + levelHeight*j*direction;
+                    console.log(i, j, direction, cx, cy)
+                    direction = -direction;
+                    j++;
+
+                    let ncx = cx + innerWidth/2;
+                    let ncy = innerHeight - cy;
+                    let r = levelHeight/4;
+                    let y = ncy - r;
+                    let x = ncx - r;
+                    let rx = r * 1.5;
+                    let ry = r * 1;
+                    let rr = r / 3;
+
+                    let geom = mainGroup;
+                    if(element.type == '定义')
+                    {
+                        geom = mainGroup.append('circle')
+                        .attr('r', r)
+                        .attr('fill', 'gold')
+                        .attr('cx', ncx)
+                        .attr('cy', ncy)
+                    }
+                    else if(element.type == '公理')
+                    {
+                        geom = mainGroup.append('ellipse')
+                        .attr('fill', 'lightgreen')
+                        .attr('cx', ncx)
+                        .attr('cy', ncy)
+                        .attr('rx', rx)
+                        .attr('ry', ry)
+                    }
+                    else if(element.type == '定律')
+                    {
+                        geom = mainGroup.append('ellipse')
+                        .attr('fill', 'lightgreen')
+                        .attr('cx', ncx)
+                        .attr('cy', ncy)
+                        .attr('rx', rx)
+                        .attr('ry', ry)
+                    }
+                    else if(element.type == '性质')
+                    {
+                        geom = mainGroup.append('rect')
+                        .attr('fill', 'silver')
+                        .attr('x', ncx - 1.5*r)
+                        .attr('y', y)
+                        .attr('width', 3*r)
+                        .attr('height', 2*r)
+                        .attr('rx', rr)
+                    }
+                    else if(element.type == '定理')
+                    {
+                        geom = mainGroup.append('rect')
+                        .attr('fill', 'silver')
+                        .attr('x', ncx - 1.5*r)
+                        .attr('y', y)
+                        .attr('width', 3*r)
+                        .attr('height', 2*r)
+                        .attr('rx', rr)
+                    }
+                    else if(element.type == '引理')
+                    {
+                        geom = mainGroup.append('rect')
+                        .attr('fill', 'silver')
+                        .attr('x', ncx - 1.5*r)
+                        .attr('y', y)
+                        .attr('width', 2*r)
+                        .attr('height', 2*r)
+                        .attr('rx', rr)
+                    }
+                    else
+                    {
+                        geom = mainGroup.append('circle')
+                        .attr('r', levelHeight/4)
+                        .attr('fill', 'silver')
+                        .attr('cx', ncx)
+                        .attr('cy', ncy)
+                    }
+
+                    geom.attr('stroke', 'black')
+                    .attr('id', element.name)
+                    .classed(element.name, true)
+                    //.classed(element.type, true)
+                    //.classed('all', true)
+                    .on("mouseover", highlight)
+                    .on("mouseout", normal);
+
+                    let text = mainGroup.append('text')
+                    .classed(element.name, true)
+                    //.classed(element.type, true)
+                    //.classed('all', true)
+                    .text(element.name)
+                    .attr('x', ncx)
+                    .attr('y', ncy)
+                    .attr('text-anchor', "middle")
+                    .on("mouseover", highlight)
+                    .on("mouseout", normal);
+
+                    element.upx = ncx;
+                    element.upy = ncy - r;
+                    element.downx = ncx;
+                    element.downy = ncy + r;
+
+                    element.depends.forEach(depname=>{
+                        let dep = concepts.find(x=>x.name==depname)
+                        //let halfx = (element.downx + dep.upx)/2;
+                        //let dy = (element.downy - dep.upy)/5;
+                        //let cpx1 = (element.downx+halfx)/2;
+                        //cpx1 = (element.downx+cpx1)/2;
+                        //let cpy1 = dep.upy;
+                        //let cpx2 = (dep.upx+halfx)/2;
+                        //cpx2 = (dep.upx+cpx2)/2;
+                        //let cpy2 = element.downy;
+                        //let path = d3.path();
+                        //path.moveTo(element.downx, element.downy)
+                        //path.lineTo(dep.upx, dep.upy);
+                        //path.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, dep.upx, dep.upy);
+                        //path.closePath();
+                        //console.log(element.downx, element.downy, cpx1, cpy1, cpx2, cpy2, dep.upx, dep.upy)
+
+                        const linkData = {'source': {'x': element.downx, 'y': element.downy}, 'target': {'x': dep.upx, 'y': dep.upy}};
+                        const pathV = d3.linkVertical().x(d=>d.x).y(d=>d.y);
+                        mainGroup.append('path')
+                        .attr('d', pathV(linkData))
+                        .attr('stroke', 'black')
+                        .attr('fill', 'none')
+                        .classed(element.name, true)
+                        //.classed(dep.name, true)
+                        //.classed('all', true)
+
+                    });
+                    
+
+                });
+            }
+
+            
+        }
+    </script>
+</head>
+<body>
+    <svg width="1920" height="1080" id="mainsvg" class="svgs"></svg>
+    <script>
+        let concepts = [
+                {
+                    "name":"集合",
+                    "type":"定义",
+                    "depends":[]
+                },
+                {
+                    "name":"样本空间",
+                    "type":"定义",
+                    "depends":["集合"]
+                },
+                {
+                    "name":"样本点",
+                    "type":"定义",
+                    "depends":["集合"]
+                },
+                {
+                    "name":"随机事件",
+                    "type":"定义",
+                    "depends":["样本空间"]
+                },
+                {
+                    "name":"事件发生",
+                    "type":"定义",
+                    "depends":["随机事件"]
+                },
+                {
+                    "name":"基本事件",
+                    "type":"定义",
+                    "depends":["样本空间", "样本点"]
+                },
+                {
+                    "name":"必然事件",
+                    "type":"定义",
+                    "depends":["样本空间", "样本点"]
+                },
+                {
+                    "name":"不可能事件",
+                    "type":"定义",
+                    "depends":["样本空间", "样本点"]
+                },
+                {
+                    "name":"事件相等",
+                    "type":"定义",
+                    "depends":["事件发生"]
+                },
+                {
+                    "name":"和事件",
+                    "type":"定义",
+                    "depends":["事件发生"]
+                },
+                {
+                    "name":"积事件",
+                    "type":"定义",
+                    "depends":["事件发生"]
+                },
+                {
+                    "name":"划分",
+                    "type":"定义",
+                    "depends":["样本空间", "随机事件"]
+                },
+                {
+                    "name":"全概率公式",
+                    "type":"定理",
+                    "depends":["样本空间", "随机事件", "划分"]
+                },
+            ];
+        showConcepts(concepts);
+        console.log(concepts);
+    </script>
+</body>
+</html>
